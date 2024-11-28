@@ -1,6 +1,8 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "FPSDemoProjectile.h"
+
+#include "FPSDemoAttributeComponent.h"
 #include "GameFramework/ProjectileMovementComponent.h"
 #include "Components/SphereComponent.h"
 
@@ -27,6 +29,7 @@ AFPSDemoProjectile::AFPSDemoProjectile()
 	ProjectileMovement->bRotationFollowsVelocity = true;
 	ProjectileMovement->bShouldBounce = true;
 
+	bReplicates = true;
 	// Die after 3 seconds by default
 	InitialLifeSpan = 3.0f;
 }
@@ -37,7 +40,22 @@ void AFPSDemoProjectile::OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor,
 	if ((OtherActor != nullptr) && (OtherActor != this) && (OtherComp != nullptr) && OtherComp->IsSimulatingPhysics())
 	{
 		OtherComp->AddImpulseAtLocation(GetVelocity() * 100.0f, GetActorLocation());
-
+		UFPSDemoAttributeComponent* AttributeComponent = Cast<UFPSDemoAttributeComponent>(OtherActor->GetComponentByClass(UFPSDemoAttributeComponent::StaticClass()));
+		if (AttributeComponent != nullptr)
+		{
+			if (AttributeComponent->IsAlive())
+			{
+				if (AttributeComponent->GetShield() > 0)
+				{
+					AttributeComponent->ApplyShieldChange(GetInstigator(), -1);
+					UE_LOG(LogTemp, Warning, TEXT("AFPSDemoProjectile::OnHit"));
+				}
+				else
+				{
+					AttributeComponent->ApplyHealthChange(GetInstigator(), -1.0f);
+				}
+			}
+		}
 		Destroy();
 	}
 }
