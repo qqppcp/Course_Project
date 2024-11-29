@@ -49,12 +49,26 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Weapon")
 	void Fire();
 
+	UFUNCTION(Server, Reliable)
+	void ServerFire();
+	
 protected:
+
+	UPROPERTY(ReplicatedUsing= "OnRep_Firing")
+	bool bIsFiring;
+
+	UFUNCTION()
+	void OnRep_Firing();
+	
+	void Stop();
+	
 	/** Ends gameplay for this component. */
 	UFUNCTION()
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
+	UFUNCTION(BlueprintCallable)
+	bool GetFire() {return bIsFiring;}
 	/** The Character holding this weapon*/
 	AFPSDemoCharacter* Character;
 };

@@ -3,11 +3,14 @@
 
 #include "FPSDemoPlayerState.h"
 
+#include "FPSDemo.h"
 #include "Net/UnrealNetwork.h"
 
-void AFPSDemoPlayerState::OnRep_Scores()
+void AFPSDemoPlayerState::OnRep_Scores(int32 OldScores)
 {
-	
+	FString Msg = FString::Printf(TEXT("Nama: %s, Score: %d"), *GetNameSafe(this), this->GetScores());
+	LogOnScreen(this, Msg, FColor::Red, 4.0f);
+	OnScoresChanged.Broadcast(this, Scores, Scores - OldScores);
 }
 
 bool AFPSDemoPlayerState::UpdatePersonalRecord(float NewTime)

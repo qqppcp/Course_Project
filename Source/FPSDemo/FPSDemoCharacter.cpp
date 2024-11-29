@@ -8,6 +8,7 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
+#include "FPSDemoPlayerController.h"
 #include "InputActionValue.h"
 #include "Engine/LocalPlayer.h"
 

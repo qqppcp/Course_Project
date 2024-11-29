@@ -3,7 +3,9 @@
 
 #include "FPSDemoAttributeComponent.h"
 
+#include "FPSDemo.h"
 #include "FPSDemoGameMode.h"
+#include "FPSDemoHittableActor.h"
 #include "Net/UnrealNetwork.h"
 
 // Sets default values for this component's properties
@@ -11,7 +13,7 @@ UFPSDemoAttributeComponent::UFPSDemoAttributeComponent()
 {
 	Health = 100;
 	Shield = 0;
-
+	Color = FVector(0, 0, 0);
 	SetIsReplicatedByDefault(true);
 }
 
@@ -24,6 +26,15 @@ void UFPSDemoAttributeComponent::MulticastHealthChanged_Implementation(AActor* I
 void UFPSDemoAttributeComponent::MulticastShieldChanged_Implementation(AActor* InstigatorActor, int32 NewShield, int32 Delta)
 {
 	OnShieldChanged.Broadcast(InstigatorActor, this, NewShield, Delta);
+}
+
+void UFPSDemoAttributeComponent::OnRep_IsBonus()
+{
+	UStaticMeshComponent* MeshComponent = Cast<UStaticMeshComponent>(GetOwner()->GetComponentByClass(UStaticMeshComponent::StaticClass()));
+	if(MeshComponent)
+	{
+		MeshComponent->SetVectorParameterValueOnMaterials("Base Color", Color);
+	}
 }
 
 bool UFPSDemoAttributeComponent::IsAlive() const
@@ -45,6 +56,14 @@ bool UFPSDemoAttributeComponent::ApplyHealthChange(AActor* InstigatorActor, floa
 		if (!FMath::IsNearlyZero(Delta))
 		{
 			MulticastHealthChanged(InstigatorActor, NewHealth, Delta);
+		}
+		if (!IsAlive())
+		{
+			AFPSDemoGameMode* GM = GetWorld()->GetAuthGameMode<AFPSDemoGameMode>();
+			if (GM)
+			{
+				GM->OnActorKilled(this->GetOwner(), InstigatorActor);
+			}
 		}
 	}
 	return !FMath::IsNearlyZero(Delta);
@@ -85,6 +104,7 @@ bool UFPSDemoAttributeComponent::IsBonus() const
 void UFPSDemoAttributeComponent::SetBonus()
 {
 	bIsBonus = true;
+	OnRep_IsBonus();
 }
 
 void UFPSDemoAttributeComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const

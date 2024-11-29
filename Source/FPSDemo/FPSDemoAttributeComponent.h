@@ -17,7 +17,7 @@ class FPSDEMO_API UFPSDemoAttributeComponent : public UActorComponent
 public:	
 	// Sets default values for this component's properties
 	UFPSDemoAttributeComponent();
-
+	
 protected:
 	// 血量
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Replicated, Category="Attributes")
@@ -26,9 +26,15 @@ protected:
 	// 次数盾
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Replicated, Category="Attributes")
 	int32 Shield;
-
+	
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Replicated, Category="Attributes")
+	FVector Color;
+
+	UPROPERTY(ReplicatedUsing="OnRep_IsBonus", BlueprintReadOnly, Category="Attributes")
 	bool bIsBonus;
+
+	UFUNCTION()
+	void OnRep_IsBonus();
 	
 	UFUNCTION(NetMulticast, Unreliable)
 	void MulticastHealthChanged(AActor* InstigatorActor, float NewHealth, float Delta);
@@ -65,6 +71,5 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category = "Attributes")
 	FOnIntAttributeChanged OnShieldChanged;
-	
 	
 };

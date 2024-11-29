@@ -29,9 +29,10 @@ AFPSDemoProjectile::AFPSDemoProjectile()
 	ProjectileMovement->bRotationFollowsVelocity = true;
 	ProjectileMovement->bShouldBounce = true;
 
-	bReplicates = true;
 	// Die after 3 seconds by default
 	InitialLifeSpan = 3.0f;
+	
+	bReplicates = true;
 }
 
 void AFPSDemoProjectile::OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit)

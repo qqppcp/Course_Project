@@ -22,10 +22,41 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input)
 	UInputMappingContext* InputMappingContext;
 
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UUserWidget> EndMenuClass;
+
+	UPROPERTY()
+	TObjectPtr<UUserWidget> EndMenuInstance;
+
+	virtual void BeginPlayingState() override;
+
+	UFUNCTION(BlueprintImplementableEvent)
+	void BlueprintBeginPlayingState();
+	
 	// Begin Actor interface
 protected:
 
 	virtual void BeginPlay() override;
 
-	// End Actor interface
+	UPROPERTY(ReplicatedUsing="OnRep_EndGame")
+	bool bIsGameEnd;
+
+	UFUNCTION()
+	void OnRep_EndGame();
+	
+	void EndGame();	
+public:
+	
+	UPROPERTY(BlueprintReadWrite, Replicated)
+	FString EndGameMessage;
+	
+	void SetEndGame()
+	{
+		bIsGameEnd = true;
+		if (IsLocalController())
+		{
+			EndGame();
+		}
+	};
+	
 };

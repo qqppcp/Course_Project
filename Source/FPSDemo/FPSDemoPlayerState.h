@@ -25,7 +25,7 @@ protected:
 	float PersonalRecordTime;
 
 	UFUNCTION()
-	void OnRep_Scores();
+	void OnRep_Scores(int32 OldScores);
 
 public:
 

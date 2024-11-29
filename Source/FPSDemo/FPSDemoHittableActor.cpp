@@ -17,6 +17,7 @@ AFPSDemoHittableActor::AFPSDemoHittableActor()
 	
 	InitialCubeScale = 1.1f;
 	bIsActive = true;
+	bReplicates = true;
 }
 
 void AFPSDemoHittableActor::PostInitializeComponents()
@@ -57,6 +58,8 @@ void AFPSDemoHittableActor::OnRep_IsActive()
 {
 	if (false == bIsActive)
 	{
+		this->SetActorEnableCollision(false);
+		MeshComp->SetCollisionProfileName("Ragdoll");
 		SetLifeSpan(1.0f);
 	}
 }
