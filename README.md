@@ -110,6 +110,10 @@ void AFPSDemoProjectile::OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor,
 }
 ```
 
+### 3.项目设置
+
+![iamge](./Images/levelsetting.png)
+
 ### 10.TODO
 
 1.只要一个端点击退出按钮就全部都退出了。
