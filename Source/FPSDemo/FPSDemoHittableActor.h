@@ -38,10 +38,10 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "GameSetting")
 	float InitialCubeScale;
 	
-	UPROPERTY(ReplicatedUsing="OnRep_IsActive")
-	bool bIsActive;
+	UPROPERTY(ReplicatedUsing="OnRep_IsAlive")
+	bool bIsAlive;
 
 	UFUNCTION()
-	void OnRep_IsActive();
+	void OnRep_IsAlive();
 
 };

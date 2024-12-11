@@ -7,6 +7,7 @@
 #include "Logging/LogMacros.h"
 #include "FPSDemoCharacter.generated.h"
 
+class UTP_WeaponComponent;
 class UInputComponent;
 class USkeletalMeshComponent;
 class UCameraComponent;
@@ -29,6 +30,15 @@ class AFPSDemoCharacter : public ACharacter
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Camera, meta = (AllowPrivateAccess = "true"))
 	UCameraComponent* FirstPersonCameraComponent;
 
+	UPROPERTY(EditDefaultsOnly, Category = "Camera")
+	TSubclassOf<UCameraShakeBase> LandedCameraShake;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Camera")
+	TSubclassOf<UCameraShakeBase> JumpCameraShake;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Camera")
+	TSubclassOf<UCameraShakeBase> HitCameraShake;
+	
 	/** Jump Input Action */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category=Input, meta=(AllowPrivateAccess = "true"))
 	UInputAction* JumpAction;
@@ -39,12 +49,23 @@ class AFPSDemoCharacter : public ACharacter
 	
 public:
 	AFPSDemoCharacter();
+	virtual void PostInitializeComponents() override;
+
+	void SetWeapon(UTP_WeaponComponent* WeaponComponent);
 
 protected:
+	
+	UPROPERTY(BlueprintReadOnly)
+	UTP_WeaponComponent* WeaponComponent;
+	
 	virtual void BeginPlay();
 
 public:
-		
+
+	virtual void Landed(const FHitResult& Hit) override;
+
+	virtual void OnJumped_Implementation() override;
+	
 	/** Look Input Action */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	class UInputAction* LookAction;
@@ -56,6 +77,21 @@ protected:
 	/** Called for looking input */
 	void Look(const FInputActionValue& Value);
 
+	UFUNCTION()
+	void OnHealthChanged(AActor* InstigatorActor, UFPSDemoAttributeComponent* OwningComp, float NewHealth, float Delta);
+
+	UFUNCTION()
+	void OnShieldChanged(AActor* InstigatorActor, UFPSDemoAttributeComponent* OwningComp, int32 NewShield, int32 Delta);
+	
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	TObjectPtr<UFPSDemoAttributeComponent> AttributeComponent;
+
+	UPROPERTY(ReplicatedUsing="OnRep_IsAlive")
+	bool bIsAlive;
+
+	UFUNCTION()
+	void OnRep_IsAlive();
+	
 protected:
 	// APawn interface
 	virtual void SetupPlayerInputComponent(UInputComponent* InputComponent) override;

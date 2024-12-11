@@ -16,7 +16,7 @@ AFPSDemoHittableActor::AFPSDemoHittableActor()
 	RootComponent = MeshComp;
 	
 	InitialCubeScale = 1.1f;
-	bIsActive = true;
+	bIsAlive = true;
 	bReplicates = true;
 }
 
@@ -32,8 +32,8 @@ void AFPSDemoHittableActor::OnHealthChanged(AActor* InstigatorActor, UFPSDemoAtt
 {
 	if(!OwningComp->IsActive())
 	{
-		bIsActive = false;
-		OnRep_IsActive();
+		bIsAlive = false;
+		OnRep_IsAlive();
 	}
 }
 
@@ -49,14 +49,14 @@ void AFPSDemoHittableActor::OnShieldChanged(AActor* InstigatorActor, UFPSDemoAtt
 	if(!OwningComp->IsAlive())
 	{
 		
-		bIsActive = false;
-		OnRep_IsActive();
+		bIsAlive = false;
+		OnRep_IsAlive();
 	}
 }
 
-void AFPSDemoHittableActor::OnRep_IsActive()
+void AFPSDemoHittableActor::OnRep_IsAlive()
 {
-	if (false == bIsActive)
+	if (false == bIsAlive)
 	{
 		this->SetActorEnableCollision(false);
 		MeshComp->SetCollisionProfileName("Ragdoll");
@@ -67,5 +67,5 @@ void AFPSDemoHittableActor::OnRep_IsActive()
 void AFPSDemoHittableActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-	DOREPLIFETIME(AFPSDemoHittableActor, bIsActive);
+	DOREPLIFETIME(AFPSDemoHittableActor, bIsAlive);
 }

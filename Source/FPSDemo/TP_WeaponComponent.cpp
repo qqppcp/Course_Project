@@ -23,6 +23,8 @@ UTP_WeaponComponent::UTP_WeaponComponent()
 	MuzzleOffset = FVector(100.0f, 0.0f, 10.0f);
 	SetIsReplicatedByDefault(true);
 	bIsFiring = false;
+	Mag = MaxMag = 25;
+	Bag = 130;
 }
 
 
@@ -43,45 +45,7 @@ void UTP_WeaponComponent::Fire()
 		bIsFiring = true;
 		OnRep_Firing();
 	}
-	
-	// // Try and fire a projectile
-	// if (ProjectileClass != nullptr)
-	// {
-	// 	UWorld* const World = GetWorld();
-	// 	if (World != nullptr)
-	// 	{
-	// 		APlayerController* PlayerController = Cast<APlayerController>(Character->GetController());
-	// 		const FRotator SpawnRotation = PlayerController->PlayerCameraManager->GetCameraRotation();
-	// 		// MuzzleOffset is in camera space, so transform it to world space before offsetting from the character location to find the final muzzle position
-	// 		const FVector SpawnLocation = GetOwner()->GetActorLocation() + SpawnRotation.RotateVector(MuzzleOffset);
-	//
-	// 		//Set Spawn Collision Handling Override
-	// 		FActorSpawnParameters ActorSpawnParams;
-	// 		ActorSpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButDontSpawnIfColliding;
-	// 		ActorSpawnParams.Instigator = Character;
-	//
-	// 		// Spawn the projectile at the muzzle
-	// 		World->SpawnActor<AFPSDemoProjectile>(ProjectileClass, SpawnLocation, SpawnRotation, ActorSpawnParams);
-	// 	}
-	// 	LogOnScreen(this, FString("Fire"), FColor::Red, 0.0f);
-	// }
-	//
-	// // Try and play the sound if specified
-	// if (FireSound != nullptr)
-	// {
-	// 	UGameplayStatics::PlaySoundAtLocation(this, FireSound, Character->GetActorLocation());
-	// }
-	//
-	// // Try and play a firing animation if specified
-	// if (FireAnimation != nullptr)
-	// {
-	// 	// Get the animation object for the arms mesh
-	// 	UAnimInstance* AnimInstance = Character->GetMesh1P()->GetAnimInstance();
-	// 	if (AnimInstance != nullptr)
-	// 	{
-	// 		AnimInstance->Montage_Play(FireAnimation, 1.f);
-	// 	}
-	// }
+
 	FTimerHandle TimerHandle;
 	GetWorld()->GetTimerManager().SetTimer(TimerHandle, this, &UTP_WeaponComponent::Stop, 0.2f, false);
 }
@@ -107,6 +71,7 @@ bool UTP_WeaponComponent::AttachWeapon(AFPSDemoCharacter* TargetCharacter)
 
 	// add the weapon as an instance component to the character
 	Character->AddInstanceComponent(this);
+	Character->SetWeapon(this);
 
 	// Set up action bindings
 	if (APlayerController* PlayerController = Cast<APlayerController>(Character->GetController()))
@@ -178,6 +143,16 @@ void UTP_WeaponComponent::OnRep_Firing()
 
 			// Spawn the projectile at the muzzle
 			GetWorld()->SpawnActor<AFPSDemoProjectile>(ProjectileClass, SpawnLocation, SpawnRotation, ActorSpawnParams);
+			if (Mag > 0)
+			{
+				Mag--;
+			}
+			else
+			{
+				int32 next = FMath::Min(MaxMag, Bag);
+				Bag -= next;
+				Mag = next;
+			}
 		}
 		FString Msg = FString::Printf(TEXT("OnRep_Firing: {%s}"), *GetNameSafe(Character->GetController()));
 		LogOnScreen(this, Msg, FColor::Red, 2.0f);

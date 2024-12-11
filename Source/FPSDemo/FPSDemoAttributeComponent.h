@@ -23,6 +23,9 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Replicated, Category="Attributes")
 	float Health;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Replicated, Category="Attributes")
+	float MaxHealth;
+	
 	// 次数盾
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Replicated, Category="Attributes")
 	int32 Shield;
@@ -50,6 +53,9 @@ public:
 	
 	UFUNCTION(BlueprintCallable, Category="Attributes")
 	float GetHealth() const;
+
+	UFUNCTION(BlueprintCallable, Category="Attributes")
+	float GetMaxHealth() const;
 
 	UFUNCTION(BlueprintCallable, Category = "Attributes")
 	bool ApplyHealthChange(AActor* InstigatorActor, float Delta);

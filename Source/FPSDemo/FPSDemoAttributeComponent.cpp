@@ -11,7 +11,7 @@
 // Sets default values for this component's properties
 UFPSDemoAttributeComponent::UFPSDemoAttributeComponent()
 {
-	Health = 100;
+	Health = MaxHealth = 100;
 	Shield = 0;
 	Color = FVector(0, 0, 0);
 	SetIsReplicatedByDefault(true);
@@ -45,6 +45,11 @@ bool UFPSDemoAttributeComponent::IsAlive() const
 float UFPSDemoAttributeComponent::GetHealth() const
 {
 	return Health;
+}
+
+float UFPSDemoAttributeComponent::GetMaxHealth() const
+{
+	return MaxHealth;
 }
 
 bool UFPSDemoAttributeComponent::ApplyHealthChange(AActor* InstigatorActor, float Delta)
@@ -111,6 +116,7 @@ void UFPSDemoAttributeComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProp
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(UFPSDemoAttributeComponent, Health);
+	DOREPLIFETIME(UFPSDemoAttributeComponent, MaxHealth);
 	DOREPLIFETIME(UFPSDemoAttributeComponent, Shield);
 	DOREPLIFETIME(UFPSDemoAttributeComponent, bIsBonus);
 }

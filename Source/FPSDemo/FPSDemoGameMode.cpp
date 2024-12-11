@@ -49,17 +49,24 @@ void AFPSDemoGameMode::GameEndTimerElapsed()
 	UGameplayStatics::SetGamePaused(this, true);
 	int AllScores = 0;
 	TMultiMap<int32, FString> GameScores;
+	TArray<AFPSDemoPlayerState*> Players;
 	for (AFPSDemoPlayerState* PlayerState : TActorRange<AFPSDemoPlayerState>(GetWorld()))
 	{
 		AllScores += PlayerState->GetScores();
 		GameScores.Add({PlayerState->GetScores(), GetNameSafe(PlayerState)});
+		Players.Add(PlayerState);
 	}
 	FString Msg = FString::Printf(TEXT("All Scores: %d\n"), AllScores);
-	for (TPair<int32, FString> Score : GameScores)
+	for (AFPSDemoPlayerState* PlayerState : Players)
 	{
-		FString App = FString::Printf(TEXT("Name: %s, Score: %d\n"), *Score.Value, Score.Key);
+		FString App = FString::Printf(TEXT("Name: %s, Id: %d, Score: %d\n"), *GetNameSafe(PlayerState), PlayerState->GetPlayerId(), PlayerState->GetScores());
 		Msg.Append(App);
 	}
+	// for (TPair<int32, FString> Score : GameScores)
+	// {
+	// 	FString App = FString::Printf(TEXT("Name: %s, Score: %d\n"), *Score.Value, Score.Key);
+	// 	Msg.Append(App);
+	// }
 	for (AFPSDemoPlayerController* Controller : TActorRange<AFPSDemoPlayerController>(GetWorld()))
 	{
 		Controller->EndGameMessage = Msg;
@@ -101,11 +108,13 @@ void AFPSDemoGameMode::OnActorKilled(AActor* VictimActor, AActor* Killer)
 		UFPSDemoAttributeComponent* AttributeComponent = VictimActor->GetComponentByClass<UFPSDemoAttributeComponent>();
 		if (PlayerState && AttributeComponent)
 		{
-			UE_LOGFMT(LogTemp, Log, "OnActorKilled: Victim: {victim}, Killer: {killer}, PlayerState: {player}", GetNameSafe(VictimActor), GetNameSafe(Killer), GetNameSafe(PlayerState));
+			UE_LOGFMT(LogTemp, Log, "OnActorKilled: Victim: {victim}, Killer: {killer}, PlayerState: {player}, PlayerId: {playerid}",
+				GetNameSafe(VictimActor), GetNameSafe(Killer), GetNameSafe(PlayerState), PlayerState->GetPlayerId());
 			PlayerState->AddScore(InitialCubeScore * (AttributeComponent->IsBonus() ? 2 : 1));
 			ExsitsSpawnBots--;
 		}
-		FString Msg = FString::Printf(TEXT("Killer: {%s},PlayerState: %s, Score: %d"), *GetNameSafe(Killer), *GetNameSafe(PlayerState), PlayerState->GetScores());
+		FString Msg = FString::Printf(TEXT("Killer: {%s},PlayerState: %s, Id: %d, Score: %d"),
+			*GetNameSafe(Killer), *GetNameSafe(PlayerState), PlayerState->GetPlayerId(), PlayerState->GetScores());
 		LogOnScreen(this, Msg, FColor::Red, 4.0f);
 	}
 	

@@ -52,8 +52,20 @@ public:
 	UFUNCTION(Server, Reliable)
 	void ServerFire();
 	
+	// Mag
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="Attributes")
+	int32 Mag;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="Attributes")
+	int32 MaxMag;
+	
+	// Bag
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="Attributes")
+	int32 Bag;
+	
 protected:
 
+	
 	UPROPERTY(ReplicatedUsing= "OnRep_Firing")
 	bool bIsFiring;
 

@@ -22,6 +22,11 @@ class AFPSDemoProjectile : public AActor
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Movement, meta = (AllowPrivateAccess = "true"))
 	UProjectileMovementComponent* ProjectileMovement;
 
+protected:
+	
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Movement")
+	UParticleSystem* ExplosionFX;
+	
 public:
 	AFPSDemoProjectile();
 
