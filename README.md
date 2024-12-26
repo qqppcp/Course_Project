@@ -1,4 +1,20 @@
 # CourseProject FPSDemo
+### 第五周.骨骼动画
+
+实现敌人的基础移动动画蓝图，并尽可能优化表现
+
+实现敌人的死亡动画，并尽可能优化表现（如添加多方向死亡动画等）。
+
+实现近战击败敌人的功能和动画表现（选做）
+
+人物资源：https://www.vrcmods.com/item?id=10874
+
+动画资源：https://www.fab.com/zh-cn/listings/98ff449d-79db-4f54-9303-75486c4fb9d9
+
+武器资源：https://www.fab.com/zh-cn/listings/8aeb9c48-b404-4dcd-9e56-1d0ecedba7f5
+
+使用UE人体的控制绑定来更改动画中每帧的位置。
+
 ### 第四周. UMG
 
 实现登录界面(需要输入用户名和密码，其中密码加密显示，有确认按钮)

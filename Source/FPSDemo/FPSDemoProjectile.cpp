@@ -39,6 +39,35 @@ AFPSDemoProjectile::AFPSDemoProjectile()
 
 void AFPSDemoProjectile::OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit)
 {
+	//TODO:修改类型的判断，直接判断是否有属性组件
+	if (OtherActor == GetInstigator())
+	{
+		return;
+	}
+	{
+		UFPSDemoAttributeComponent* AttributeComponent = Cast<UFPSDemoAttributeComponent>(OtherActor->GetComponentByClass(UFPSDemoAttributeComponent::StaticClass()));
+		if (AttributeComponent != nullptr)
+		{
+			if (AttributeComponent->IsAlive())
+			{
+				if (AttributeComponent->GetShield() > 0)
+				{
+					AttributeComponent->ApplyShieldChange(GetInstigator(), -1);
+					UE_LOG(LogTemp, Warning, TEXT("AFPSDemoProjectile::OnHit"));
+				}
+				else
+				{
+					AttributeComponent->ApplyHealthChange(GetInstigator(), -1.0f);
+				}
+			}
+			Destroy();
+			if ((OtherActor != this) && (OtherComp != nullptr) && OtherComp->IsSimulatingPhysics())
+			{
+				OtherComp->AddImpulseAtLocation(GetVelocity() * 100.0f, GetActorLocation());
+			}
+			return;
+		}
+	}
 	// Only add impulse and destroy projectile if we hit a physics
 	if ((OtherActor != nullptr) && (OtherActor != this) && (OtherComp != nullptr) && OtherComp->IsSimulatingPhysics())
 	{
