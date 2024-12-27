@@ -37,14 +37,9 @@ void UTP_WeaponComponent::Fire()
 	if (!GetOwner()->HasAuthority())
 	{
 		ServerFire();
-		bIsFiring = true;
-		OnRep_Firing();
 	}
-	else
-	{
-		bIsFiring = true;
-		OnRep_Firing();
-	}
+	bIsFiring = true;
+	OnRep_Firing();
 
 	FTimerHandle TimerHandle;
 	GetWorld()->GetTimerManager().SetTimer(TimerHandle, this, &UTP_WeaponComponent::Stop, 0.2f, false);

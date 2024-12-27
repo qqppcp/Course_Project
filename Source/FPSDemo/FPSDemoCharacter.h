@@ -38,7 +38,7 @@ class AFPSDemoCharacter : public ACharacter
 
 	UPROPERTY(EditDefaultsOnly, Category = "Camera")
 	TSubclassOf<UCameraShakeBase> HitCameraShake;
-	
+
 	/** Jump Input Action */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category=Input, meta=(AllowPrivateAccess = "true"))
 	UInputAction* JumpAction;
@@ -46,7 +46,7 @@ class AFPSDemoCharacter : public ACharacter
 	/** Move Input Action */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category=Input, meta=(AllowPrivateAccess = "true"))
 	UInputAction* MoveAction;
-	
+
 public:
 	AFPSDemoCharacter();
 	virtual void PostInitializeComponents() override;
@@ -54,18 +54,16 @@ public:
 	void SetWeapon(UTP_WeaponComponent* WeaponComponent);
 
 protected:
-	
 	UPROPERTY(BlueprintReadOnly)
 	UTP_WeaponComponent* WeaponComponent;
-	
+
 	virtual void BeginPlay();
 
 public:
-
 	virtual void Landed(const FHitResult& Hit) override;
 
 	virtual void OnJumped_Implementation() override;
-	
+
 	/** Look Input Action */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	class UInputAction* LookAction;
@@ -82,7 +80,7 @@ protected:
 
 	UFUNCTION()
 	void OnShieldChanged(AActor* InstigatorActor, UFPSDemoAttributeComponent* OwningComp, int32 NewShield, int32 Delta);
-	
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	TObjectPtr<UFPSDemoAttributeComponent> AttributeComponent;
 
@@ -91,7 +89,7 @@ protected:
 
 	UFUNCTION()
 	void OnRep_IsAlive();
-	
+
 protected:
 	// APawn interface
 	virtual void SetupPlayerInputComponent(UInputComponent* InputComponent) override;
@@ -102,6 +100,4 @@ public:
 	USkeletalMeshComponent* GetMesh1P() const { return Mesh1P; }
 	/** Returns FirstPersonCameraComponent subobject **/
 	UCameraComponent* GetFirstPersonCameraComponent() const { return FirstPersonCameraComponent; }
-	
 };
-
