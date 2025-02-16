@@ -1,0 +1,311 @@
+﻿
+#include "CustomSceneViewExtension.h"
+
+#include "ColorReplaceComputePass.h"
+#include "PixelShaderUtils.h"
+#include "SceneRendering.h"
+#include "PostProcess/PostProcessing.h"
+#include "PostProcess/PostProcessMaterial.h"
+
+DECLARE_GPU_DRAWCALL_STAT(ColorReplace); // Unreal Insights
+DECLARE_GPU_DRAWCALL_STAT(DownloadReplaceCount); // Unreal Insights
+DECLARE_GPU_DRAWCALL_STAT(ColorExtract); // Unreal Insights
+
+namespace ComputeHelperFunctions
+{
+	FVector3f RGBToXYZ(const FVector3f Color)
+	{
+		float R = Color.X;
+		float G = Color.Y;
+		float B = Color.Z;
+
+		if (R > 0.04045f)
+		{
+			R = FMath::Pow((R + 0.055f) / (1 + 0.055f), 2.4f);
+		}
+		else
+		{
+			R = R / 12.92;
+		}
+		if (G > 0.04045f)
+		{
+			G = FMath::Pow((G + 0.055f) / (1 + 0.055f), 2.4f);
+		}
+		else
+		{
+			G = G / 12.92;
+		}
+		if (B > 0.04045f)
+		{
+			B = FMath::Pow((B + 0.055f) / (1 + 0.055f), 2.4f);
+		}
+		else
+		{
+			B = R / 12.92;
+		}
+
+		R = R * 100;
+		G = G * 100;
+		B = B * 100;
+
+		const float X = R * 0.4124 + G * 0.3576 + B * 0.1805;
+		const float Y = R * 0.2126 + G * 0.7152 + B * 0.0722;
+		const float Z = R * 0.0193 + G * 0.1192 + B * 0.9505;
+		
+		return FVector3f(X, Y, Z);
+	}
+	
+	FVector3f XYZToLab(const FVector3f XYZ)
+	{
+		// Found here https://www.easyrgb.com/en/math.php
+		// Under XYZ (Tristimulus) Reference values of a perfect reflecting diffuser
+		// D65 illuminant, 2° observer
+		constexpr float Xn = 95.047;
+		constexpr float Yn = 100.000;
+		constexpr float Zn = 108.883;
+
+		const float X = XYZ.X / Xn;
+		const float Y = XYZ.Y / Yn;
+		const float Z = XYZ.Z / Zn;
+
+		constexpr float Epsilon = 0.008856;
+		constexpr float Kappa = 903.3;
+		constexpr float Third = 1.0 / 3.0;
+
+		const float fX = (X > Epsilon) ? FMath::Pow(X, Third) : (Kappa * X + 16.0) / 116.0;
+		const float fY = (Y > Epsilon) ? FMath::Pow(Y, Third) : (Kappa * Y + 16.0) / 116.0;
+		const float fZ = (Z > Epsilon) ? FMath::Pow(Z, Third) : (Kappa * Z + 16.0) / 116.0;
+
+		const float L = (116.0 * fY) - 16.0;
+		const float a = 500.0 * (fX - fY);
+		const float b = 200.0 * (fY - fZ);
+	
+		return {L, a, b};
+	}
+
+	FVector3f RGBToLab(const FVector3f Colour)
+	{
+		return XYZToLab(RGBToXYZ(Colour));
+	}
+
+	FVector3f RGBToHSL(const FVector3f Colour)
+	{
+		//Min. value of RGB
+		const float Min = FMath::Min3(Colour.X, Colour.Y, Colour.Z);    
+		//Max. value of RGB
+		const float Max = FMath::Max3(Colour.X, Colour.Y, Colour.Z);    
+		//Delta RGB value
+		const float Delta = Max - Min;            
+
+		const float L = (Max + Min) / 2;
+
+		float H = 0;
+		float S = 0;
+
+		// If delta is not grey, it has chroma
+		if (Delta > 0)                                     
+		{
+			S = L > 0.5 ? Delta / (2 - Max - Min) : Delta / (Max + Min);
+
+			if(Max == Colour.X)
+			{
+				H = (Colour.Y - Colour.Z) / Delta + (Colour.Y < Colour.Z ? 6 : 0);
+			}
+			else if(Max == Colour.Y)
+			{
+				H = (Colour.Z - Colour.X) / Delta + 2;
+			}
+			else if(Max == Colour.Z)
+			{
+				H = (Colour.X - Colour.Y) / Delta + 4;
+			}
+
+			H /= 6;
+		}
+
+		return FVector3f(H, S, L);
+	}
+}
+
+FCustomSceneViewExtension::FCustomSceneViewExtension(const FAutoRegister& AutoRegister)
+	: FSceneViewExtensionBase(AutoRegister)
+{
+	Readback = new FRHIGPUBufferReadback(TEXT("Color Replacement Counts Readback"));
+}
+
+FCustomSceneViewExtension::~FCustomSceneViewExtension()
+{
+	delete Readback;
+	Readback = nullptr;
+}
+
+void FCustomSceneViewExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& GraphBuilder, FSceneView& InView,
+	const FRenderTargetBindingSlots& RenderTargets, TRDGUniformBufferRef<FSceneTextureUniformParameters> SceneTextures)
+{
+	FSceneViewExtensionBase::
+		PostRenderBasePassDeferred_RenderThread(GraphBuilder, InView, RenderTargets, SceneTextures);
+}
+
+void FCustomSceneViewExtension::PrePostProcessPass_RenderThread(FRDGBuilder& GraphBuilder, const FSceneView& View,
+	const FPostProcessingInputs& Inputs)
+{
+	FSceneViewExtensionBase::PrePostProcessPass_RenderThread(GraphBuilder, View, Inputs);
+
+	// From Tutorial
+	checkSlow(View.bIsViewInfo);
+	const FIntRect Viewport = static_cast<const FViewInfo&>(View).ViewRect;
+	// Requires RHI & RenderCore
+	const FGlobalShaderMap* GlobalShaderMap = GetGlobalShaderMap(GMaxRHIFeatureLevel);
+
+	constexpr bool bUseAsyncCompute = false;
+	const bool bAsyncCompute = GSupportsEfficientAsyncCompute && (GNumExplicitGPUsForRendering == 1) && bUseAsyncCompute;
+
+	RDG_GPU_STAT_SCOPE(GraphBuilder, ColorReplace); // Unreal Insights
+	RDG_EVENT_SCOPE(GraphBuilder, "Color Replace Compute"); // RenderDoc
+
+	// Declaring all the buffers, UAVs and SRVs ahead of time
+	FRDGTextureUAVRef SceneColorTextureUAV = nullptr;
+	FRDGBufferRef ColorReplacementDataBuffer = nullptr;
+	FRDGBufferRef ColorReplacementCountBuffer = nullptr;
+	FRDGBufferUAVRef ColorReplacementCountBufferUAV = nullptr;
+	FRDGBufferRef ExecuteIndirectBuffer = nullptr;
+	FRDGBufferUAVRef ExecuteIndirectBufferUAV = nullptr;
+
+	// This is to get the base color without shading
+	const FSceneTextureShaderParameters SceneTextures = CreateSceneTextureShaderParameters(GraphBuilder, View, ESceneTextureSetupMode::SceneColor | ESceneTextureSetupMode::GBuffers);
+	// This is color with shading and shadows
+	SceneColorTextureUAV = GraphBuilder.CreateUAV((*Inputs.SceneTextures)->SceneColorTexture);
+
+	// Creating the data for what colors we want to replace
+	TArray<FColorReplace> ColorReplacements = {
+		{
+			ComputeHelperFunctions::RGBToLab(FVector3f(1.0f, 0.0f, 0.0f)),
+			10.0,
+			ComputeHelperFunctions::RGBToHSL(FVector3f(0.0f, 1.0f, 0.0f))
+		},
+		{
+			ComputeHelperFunctions::RGBToLab(FVector3f(0.0f, 1.0f, 0.0f)),
+			10.0,
+			ComputeHelperFunctions::RGBToHSL(FVector3f(0.0f, 0.0f, 1.0f))
+		},
+		{
+			ComputeHelperFunctions::RGBToLab(FVector3f(0.0f, 0.0f, 1.0f)),
+			10.0,
+			ComputeHelperFunctions::RGBToHSL(FVector3f(1.0f, 0.0f, 0.0f))
+		},
+	};
+
+	// Create the buffer for uploading the data to the GPU
+	ColorReplacementDataBuffer = CreateStructuredBuffer(GraphBuilder, TEXT("Color Replacement Buffer"), sizeof(FColorReplace), ColorReplacements.Num(), ColorReplacements.GetData(), ColorReplacements.Num() * sizeof(FColorReplace));
+
+	// Buffer for how many pixels we've replaced
+	const FRDGBufferDesc ColorReplacementCountDesc = FRDGBufferDesc::CreateStructuredDesc(sizeof(uint32), ColorReplacements.Num());
+	ColorReplacementCountBuffer = GraphBuilder.CreateBuffer(ColorReplacementCountDesc, TEXT("Color Replacement Counts"));
+	ColorReplacementCountBufferUAV = GraphBuilder.CreateUAV(ColorReplacementCountBuffer);
+
+	// Buffer for setting up the indirect dispatch
+	FRDGBufferDesc ExecuteIndirectDesc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), 4);
+	ExecuteIndirectDesc.Usage = EBufferUsageFlags(ExecuteIndirectDesc.Usage | BUF_ByteAddressBuffer | BUF_DrawIndirect);
+	ExecuteIndirectBuffer = GraphBuilder.CreateBuffer(ExecuteIndirectDesc, TEXT("Execute Indirect Buffer"));
+	ExecuteIndirectBufferUAV = GraphBuilder.CreateUAV(ExecuteIndirectBuffer);
+
+	FColorReplaceCS::FParameters* Parameters = GraphBuilder.AllocParameters<FColorReplaceCS::FParameters>();
+	Parameters->ColorCount = ColorReplacements.Num();
+	Parameters->SceneColorTexture = SceneColorTextureUAV;
+	Parameters->View = View.ViewUniformBuffer;
+	Parameters->SceneTextures = SceneTextures;
+	Parameters->ColorReplacementDataBuffer = GraphBuilder.CreateSRV(ColorReplacementDataBuffer);
+	Parameters->ColorReplacementCount = ColorReplacementCountBufferUAV;
+	Parameters->ExecuteIndirectBuffer = ExecuteIndirectBufferUAV;
+	
+	const FIntPoint ThreadCount = Viewport.Size();
+	const FIntVector GroupCount = FComputeShaderUtils::GetGroupCount(ThreadCount, FIntPoint(ColorReplaceCompute::THREADS_X, ColorReplaceCompute::THREADS_Y));
+	// FComputeShaderUtils::AddPass(GraphBuilder, RDG_EVENT_NAME("Colour Replace Compute Pass %u", 1), ERDGPassFlags::Compute, TShaderMapRef<FColorReplaceCS>(GlobalShaderMap), Parameters, GroupCount);
+
+	{
+		RDG_GPU_STAT_SCOPE(GraphBuilder, DownloadReplaceCount); // Unreal Insights
+		RDG_EVENT_SCOPE(GraphBuilder,  "Download Replace Count"); // RenderDoc
+
+		// Download the data
+		const uint32 NumOfBytes = sizeof(uint32) * ColorReplacements.Num();
+		AddEnqueueCopyPass(GraphBuilder, Readback, ColorReplacementCountBuffer, NumOfBytes);
+		if (Readback->IsReady())
+		{
+			ColorReplacementCounts.Empty();
+			// Read the data
+			uint32* Buffer = (uint32*)Readback->Lock(NumOfBytes);
+	
+			// Copy the data
+			for(int i = 0; i < ColorReplacements.Num(); i++)
+			{
+				ColorReplacementCounts.Add(Buffer[i]);
+			}
+				
+			Readback->Unlock();
+		}
+	}
+
+	// Execute the indirect compute shader
+	FIndirectComputeCS::FParameters* IndirectParameters = GraphBuilder.AllocParameters<FIndirectComputeCS::FParameters>();
+	IndirectParameters->SceneColorTexture = SceneColorTextureUAV;
+
+	const ERDGPassFlags PassFlags = bAsyncCompute? ERDGPassFlags::AsyncCompute : ERDGPassFlags::Compute;
+	TShaderRef<FIndirectComputeCS> IndirectComputeShader = TShaderMapRef<FIndirectComputeCS>(GlobalShaderMap);
+
+	constexpr uint32 IndirectArgsOffset = 0;
+	FComputeShaderUtils::ValidateGroupCount(GroupCount);
+	FComputeShaderUtils::ValidateIndirectArgsBuffer(ExecuteIndirectBuffer, IndirectArgsOffset);
+	// GraphBuilder.AddPass(RDG_EVENT_NAME("Colour Replace Compute Pass %u", 2),
+	//                      IndirectParameters, PassFlags,
+	//                      [IndirectParameters, IndirectComputeShader, ExecuteIndirectBuffer, IndirectArgsOffset](
+	//                      FRHIComputeCommandList& RHICmdList)
+	//                      {
+	// 	                     FComputeShaderUtils::DispatchIndirect(RHICmdList, IndirectComputeShader,
+	// 	                                                           *IndirectParameters, ExecuteIndirectBuffer,
+	// 	                                                           IndirectArgsOffset);
+	//                      });
+
+	{
+		RDG_GPU_STAT_SCOPE(GraphBuilder, ColorExtract);
+		RDG_EVENT_SCOPE(GraphBuilder,  "ColorExtract");
+
+		const FScreenPassTexture SceneColorTexture((*Inputs.SceneTextures)->SceneColorTexture, Viewport);
+
+		FColorExtractPS::FParameters* PParameters = GraphBuilder.AllocParameters<FColorExtractPS::FParameters>();
+		PParameters->SceneColorTexture = SceneColorTexture.Texture;
+		PParameters->SceneTextures = SceneTextures;
+		PParameters->TargetColor = FVector3f(1.0f, 0.0f, 0.0f);
+		PParameters->View = View.ViewUniformBuffer;
+		PParameters->RenderTargets[0] = FRenderTargetBinding((*Inputs.SceneTextures)->SceneColorTexture, ERenderTargetLoadAction::ELoad);
+
+		TShaderMapRef<FColorExtractPS> PixelShader(GlobalShaderMap);
+		//TShaderRef<FColorExtractPS> PixelShader = TShaderMapRef<FColorExtractPS>(GlobalShaderMap);
+		// FPixelShaderUtils::AddFullscreenPass(GraphBuilder, GlobalShaderMap, FRDGEventName(TEXT("Color Extract Pass")),
+		// 	PixelShader, PParameters, Viewport);
+	}
+}
+
+void FCustomSceneViewExtension::SubscribeToPostProcessingPass(EPostProcessingPass Pass,
+	FAfterPassCallbackDelegateArray& InOutPassCallbacks, bool bIsPassEnabled)
+{
+	FSceneViewExtensionBase::SubscribeToPostProcessingPass(Pass, InOutPassCallbacks, bIsPassEnabled);
+	if(Pass == EPostProcessingPass::MotionBlur)
+	{
+#if false
+		InOutPassCallbacks.Add(FAfterPassCallbackDelegate::CreateRaw(this, &FCustomSceneViewExtension::CustomPostProcessFunction));
+#endif
+	}
+}
+
+FScreenPassTexture FCustomSceneViewExtension::CustomPostProcessFunction(FRDGBuilder& GraphBuilder,
+	const FSceneView& SceneView, const FPostProcessMaterialInputs& Inputs)
+{
+	// Do something here
+	return FScreenPassTexture();
+}
+
+FScreenPassTexture FCustomSceneViewExtension::AfterTonemap_RenderThread(FRDGBuilder& GraphBuilder,
+	const FSceneView& View, const FPostProcessMaterialInputs& InOutInputs)
+{
+	return FScreenPassTexture();
+}

@@ -41,4 +41,17 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Score")
 	void AddScore(int32 Delta);
+
+	void SetTeamID(int32 ID) { TeamID = ID; }
+	int32 GetTeamID() const { return TeamID; }
+
+	void AddKill() { KillsNum++; }
+	int32 GetKillsNum() const { return KillsNum; }
+	void AddDeath() { DeathsNum++; }
+	int32 GetDeathsNum() const { return DeathsNum; }
+
+private:
+	int32 TeamID;
+	int32 KillsNum = 0;
+	int32 DeathsNum = 0;
 };

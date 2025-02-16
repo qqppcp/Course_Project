@@ -105,7 +105,7 @@ void UTP_WeaponComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 void UTP_WeaponComponent::OnRep_Firing()
 {
-	if(bIsFiring)
+	if(bIsFiring && Mag > 0)
 	{
 		// Try and play the sound if specified
 		if (FireSound != nullptr)
@@ -141,6 +141,12 @@ void UTP_WeaponComponent::OnRep_Firing()
 			if (Mag > 0)
 			{
 				Mag--;
+				if (Mag == 0)
+				{
+					int32 next = FMath::Min(MaxMag, Bag);
+					Bag -= next;
+					Mag = next;
+				}
 			}
 			else
 			{

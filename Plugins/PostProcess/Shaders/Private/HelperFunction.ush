@@ -1,0 +1,319 @@
+﻿#include "/Engine/Private/Common.ush"
+
+static const float HelperEpsilon = 0.0001f;
+
+float3 GetUnlitSceneColor(const uint2 ScreenPosition)
+{
+	FScreenSpaceData ScreenSpaceData = GetScreenSpaceDataUint(ScreenPosition, false);
+	return ScreenSpaceData.GBuffer.BaseColor;
+}
+
+float3 RGBtoLinear(const float3 InColor)
+{
+	float3 LinearColor;
+	
+	FLATTEN
+	if(InColor.r > 0.04045)
+	{
+		LinearColor.r = pow((InColor.r + 0.055) / 1.055, 2.4);
+	} else
+	{
+		LinearColor.r = InColor.r / 12.92;
+	}
+
+	FLATTEN
+	if(InColor.g > 0.04045)
+	{
+		LinearColor.g = pow((InColor.g + 0.055) / 1.055, 2.4);
+	} else
+	{
+		LinearColor.g = InColor.g / 12.92;
+	}
+
+	FLATTEN
+	if(InColor.b > 0.04045)
+	{
+		LinearColor.b = pow((InColor.b + 0.055) / 1.055, 2.4);
+	} else
+	{
+		LinearColor.b = InColor.b / 12.92;
+	}
+
+	return LinearColor;
+}
+
+float3 RGBtoHSL(float3 InColor)
+{
+	//Min. value of RGB
+	const float Min = min3(InColor.r, InColor.g, InColor.b);    
+	//Max. value of RGB
+	const float Max = max3(InColor.r, InColor.g, InColor.b);    
+	//Delta RGB value
+	const float Delta = Max - Min;            
+
+	const float L = (Max + Min) / 2.0;
+
+	float H = 0.0;
+	float S = 0.0;
+
+	// If delta is not grey, it has chroma
+	if (Delta > 0.0)                                     
+	{
+		S = L > 0.5 ? Delta / (2.0 - Max - Min) : Delta / (Max + Min);
+
+		if(Max == InColor.r)
+		{
+			H = (InColor.g - InColor.b) / Delta + (InColor.g < InColor.b ? 6.0 : 0.0);
+		}
+		else if(Max == InColor.g)
+		{
+			H = (InColor.b - InColor.r) / Delta + 2.0;
+		}
+		else if(Max == InColor.b)
+		{
+			H = (InColor.r - InColor.g) / Delta + 4.0;
+		}
+
+		H /= 6.0;
+	}
+
+	return float3(H, S, L);
+}
+
+float3 HSLtoRGB(float3 InColor)
+{
+	const float H = InColor.r * 360.0;
+	const float S = InColor.g;
+	const float L = InColor.b;
+
+	const float A = S * min(L, 1.0 - L);
+
+	const float KR = (0.0f + H / 30.0f) % 12;
+	const float KG = (8.0f + H / 30.0f) % 12;
+	const float KB = (4.0f + H / 30.0f) % 12;
+
+	const float R = L - A * max(min3(KR - 3.0f, 9.0 - KR, 1.0), -1.0f);
+	const float G = L - A * max(min3(KG - 3.0f, 9.0 - KG, 1.0), -1.0f);
+	const float B = L - A * max(min3(KB - 3.0f, 9.0 - KB, 1.0), -1.0f);
+
+	return float3(R, G, B);
+}
+
+float3 RGBtoXYZ(float3 InColor)
+{
+	float R = InColor.r;
+	float G = InColor.g;
+	float B = InColor.b;
+
+	if(R > 0.04045)
+	{
+		R = pow(((R + 0.055) / 1.055), 2.4);
+	} else
+	{
+		R = R / 12.92;
+	}
+	if(G > 0.04045)
+	{
+		G = pow(((G + 0.055) / 1.055), 2.4);
+	}
+	else
+	{
+		G = G / 12.92;
+	}
+	if (B > 0.04045)
+	{
+		B = pow(((B + 0.055) / 1.055), 2.4);
+	}
+	else
+	{
+		B = B / 12.92;
+	}
+
+	R = R * 100.0;
+	G = G * 100.0;
+	B = B * 100.0;
+
+	const float X = R * 0.4124 + G * 0.3576 + B * 0.1805;
+	const float Y = R * 0.2126 + G * 0.7152 + B * 0.0722;
+	const float Z = R * 0.0193 + G * 0.1192 + B * 0.9505;
+
+	return float3(X, Y, Z);
+}
+
+float3 XYZtoCIELab(float3 InXYZ)
+{
+	// Found here https://www.easyrgb.com/en/math.php
+	// Under XYZ (Tristimulus) Reference values of a perfect reflecting diffuser
+	// D65 illuminant, 2° observer
+	const float Xn = 95.047;
+	const float Yn = 100.000;
+	const float Zn = 108.883;
+
+	const float X = InXYZ.x / Xn;
+	const float Y = InXYZ.y / Yn;
+	const float Z = InXYZ.z / Zn;
+
+	const float Epsilon = 0.008856;
+	const float Kappa = 903.3;
+	const float Third = 1.0 / 3.0;
+
+	const float fX = (X > Epsilon) ? pow(X, Third) : (Kappa * X + 16.0) / 116.0;
+	const float fY = (Y > Epsilon) ? pow(Y, Third) : (Kappa * Y + 16.0) / 116.0;
+	const float fZ = (Z > Epsilon) ? pow(Z, Third) : (Kappa * Z + 16.0) / 116.0;
+
+	const float L = (116.0 * fY) - 16.0;
+	const float a = 500.0 * (fX - fY);
+	const float b = 200.0 * (fY - fZ);
+
+	return float3(L, a, b);
+}
+
+float CIELabtoHue(const float InA, const float InB)          
+{
+	float Bias = 0.0;
+	
+	BRANCH
+	if (InA >= 0.0 && InB < HelperEpsilon)
+	{
+		return 0.0;
+	}
+	BRANCH
+	if (InA < 0.0 && InB < HelperEpsilon)
+	{
+		return 180.0;
+	}
+	BRANCH
+	if (InA < HelperEpsilon && InB > 0.0)
+	{
+		return 90.0;
+	}
+	BRANCH
+	if (InA < HelperEpsilon && InB < 0.0)
+	{
+		return 270.0;
+	}
+
+	FLATTEN
+	if (InA > 0.0 && InB > 0.0)
+	{
+		Bias = 0.0;
+	}
+	FLATTEN
+	if (InA < 0.0)
+	{
+		Bias = 180.0;
+	}
+	FLATTEN
+	if (InA > 0.0 && InB < 0.0)
+	{
+		Bias = 360.0;
+	}
+
+	return degrees(atan(InB / InA)) + Bias;
+}
+
+float3 RGBtoLab(float3 InColor)
+{
+	return XYZtoCIELab(RGBtoXYZ(InColor));
+}
+
+float DeltaE2000(float3 CIEA, float3 CIEB, float LWeight, float CWeight, float HWeight)
+{
+	//Color #1 CIE-L*ab values
+	const float CIEL1 = CIEA.x;
+	const float CIEa1 = CIEA.y;
+	const float CIEb1 = CIEA.z;
+	//Color #2 CIE-L*ab values
+	const float CIEL2 = CIEB.x;
+	const float CIEa2 = CIEB.y;
+	const float CIEb2 = CIEB.z;
+
+	float xC1 = sqrt(CIEa1 * CIEa1 + CIEb1 * CIEb1);
+	float xC2 = sqrt(CIEa2 * CIEa2 + CIEb2 * CIEb2);
+	const float xCX = (xC1 + xC2) / 2.0;
+	const float xGX = 0.5 * (1.0 - sqrt(pow(xCX,7.0) / (pow(xCX, 7.0) + pow(25.0, 7.0))));
+	float xNN = (1.0 + xGX) * CIEa1;
+	xC1 = sqrt(xNN * xNN + CIEb1 * CIEb1);
+	float xH1 = CIELabtoHue(xNN, CIEb1);
+	xNN = (1.0 + xGX) * CIEa2;
+	xC2 = sqrt(xNN * xNN + CIEb2 * CIEb2);
+	float xH2 = CIELabtoHue(xNN, CIEb2);
+	float xDL = CIEL2 - CIEL1;
+	float xDC = xC2 - xC1;
+
+	float xDH = 0.0;
+
+	if (xC1 * xC2 < HelperEpsilon)
+	{
+		xDH = 0.0;
+	}
+	else
+	{
+		xNN = round(xH2 - xH1);
+		if (abs(xNN) <= 180.0)
+		{
+			xDH = xH2 - xH1;
+		}
+		else
+		{
+			if (xNN > 180.0)
+			{
+				xDH = xH2 - xH1 - 360.0;
+			}
+			else
+			{
+				xDH = xH2 - xH1 + 360.0;
+			}
+		}
+	}
+
+	xDH = 2.0 * sqrt(xC1 * xC2) * sin(radians(xDH / 2.0));
+	float xLX = (CIEL1 + CIEL2) / 2.0;
+	float xCY = (xC1 + xC2) / 2.0;
+
+	float xHX = 0.0;
+	
+	if (xC1 * xC2 < HelperEpsilon)
+	{
+		xHX = xH1 + xH2;
+	}
+	else
+	{
+		xNN = abs(round(xH1 - xH2));
+
+		if (xNN > 180.0)
+		{
+			if ((xH2 + xH1) < 360.0)
+			{
+				xHX = xH1 + xH2 + 360.0;
+			}
+			else
+			{
+				xHX = xH1 + xH2 - 360.0;
+			}
+		}
+		else
+		{
+			xHX = xH1 + xH2;
+		}
+
+		xHX /= 2.0;
+	}
+	const float xTX = 1.0 - 0.17 * cos(radians(xHX - 30.0)) + 0.24
+		* cos(radians(2.0 * xHX)) + 0.32
+		* cos(radians(3.0 * xHX + 6.0)) - 0.20
+		* cos(radians(4.0 * xHX - 63.0));
+	const float xPH = 30.0 * exp(-((xHX - 275.0) / 25.0) * ((xHX - 275.0) / 25.0));
+	const float xRC = 2.0 * sqrt(pow(xCY, 7.0) / (pow(xCY, 7.0) + pow(25.0, 7.0)));
+	const float xSL = 1.0 + ((0.015 * ((xLX - 50.0) * (xLX - 50.0)))
+		/ sqrt(20.0 + ((xLX - 50.0) * (xLX - 50.0))));
+
+	const float xSC = 1.0 + 0.045 * xCY;
+	const float xSH = 1.0 + 0.015 * xCY * xTX;
+	const float xRT = -sin(radians(2.0 * xPH)) * xRC;
+	xDL = xDL / (LWeight * xSL);
+	xDC = xDC / (CWeight * xSC);
+	xDH = xDH / (HWeight * xSH);
+
+	return sqrt(pow(xDL, 2.0) + pow(xDC, 2.0) + pow(xDH, 2.0) + xRT * xDC * xDH);
+}

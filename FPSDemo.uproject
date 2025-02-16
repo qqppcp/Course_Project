@@ -26,6 +26,10 @@
 		{
 			"Name": "VRM4U",
 			"Enabled": true
+		},
+		{
+			"Name": "SkeletalMeshModelingTools",
+			"Enabled": false
 		}
 	]
 }

@@ -40,7 +40,7 @@ AFPSDemoProjectile::AFPSDemoProjectile()
 void AFPSDemoProjectile::OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit)
 {
 	//TODO:修改类型的判断，直接判断是否有属性组件
-	if (OtherActor == GetInstigator())
+	if (!OtherActor || OtherActor == GetInstigator())
 	{
 		return;
 	}

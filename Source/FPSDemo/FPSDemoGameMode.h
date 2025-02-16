@@ -9,6 +9,25 @@
 
 struct FEnvQueryResult;
 
+/* 游戏模式 */
+// 游戏基础数据
+USTRUCT(BlueprintType)
+struct FGameData {
+	GENERATED_USTRUCT_BODY()
+
+	// 玩家数量
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Game", meta = (ClampMin = "1", ClampMax = "100"))
+	int32 PlayersNum = 2;
+
+	// 重生的时间(s)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Game", meta = (ClampMin = "3", ClampMax = "20"))
+	int32 RespawnTime = 5;
+
+	// 队伍总数
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Game", meta = (ClampMin = "3", ClampMax = "20"))
+	int32 TeamCount = 2;
+};
+
 UCLASS(minimalapi)
 class AFPSDemoGameMode : public AGameModeBase
 {
@@ -52,6 +71,7 @@ public:
 	
 	virtual void StartPlay() override;
 	AFPSDemoGameMode();
+	
 };
 
 

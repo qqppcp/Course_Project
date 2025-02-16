@@ -1,0 +1,94 @@
+﻿#include "/Engine/Private/Common.ush"
+#include "/Engine/Private/DeferredShadingCommon.ush"
+#include "HelperFunction.ush"
+
+struct FColorReplace
+{
+	float3 TargetColorLab;
+	float Tolerance;
+	float3 ReplacementColorHSL;
+};
+
+int ColorCount;
+
+// Read-write textures
+RWTexture2D<float4> SceneColorTexture;
+
+// Readonly buffers
+StructuredBuffer<FColorReplace> ColorReplacementDataBuffer;
+
+// Read-write buffers
+RWStructuredBuffer<int> ColorReplacementCount;
+
+// Buffer used to store the indirect execution data
+RWByteAddressBuffer ExecuteIndirectBuffer;
+
+[numthreads(THREADS_X, THREADS_Y, 1)]
+void ColorChangeMaskCS(uint3 DispatchThreadID : SV_DispatchThreadID, uint3 GroupThreadID : SV_GroupThreadID)
+{
+	const float4 SceneColor = SceneColorTexture[DispatchThreadID.xy];
+	const float3 SceneColorHSL = RGBtoHSL(saturate(SceneColor.rgb));
+
+	// Get the current scene color lab value
+#if USE_UNLIT_SCENE_COLOR
+	float3 SceneColorUnlit = GetUnlitSceneColor(DispatchThreadID.xy);
+	const float3 SceneColorLab = RGBtoLab(SceneColorUnlit.rgb);
+#else
+	const float3 SceneColorLab = RGBtoLab(SceneColor.rgb);
+#endif
+
+	bool bChanged = false;
+	float3 SceneColorOut = SceneColor.rgb;
+	// Iterate through the colours, if any are within the threshold, change the colour
+	// UNROLL If using a fixed number of colours, you can use this macro to unroll the loop
+	for(int i = 0; i < ColorCount; i++)
+	{
+		const FColorReplace ColorReplace = ColorReplacementDataBuffer[i];
+		const float DeltaE = DeltaE2000(ColorReplace.TargetColorLab, SceneColorLab, 1, 1, 1);
+
+		BRANCH
+		if (DeltaE < ColorReplace.Tolerance)
+		{
+			const float LerpAmount = saturate(DeltaE / ColorReplace.Tolerance);
+			const float HueLerp = lerp(SceneColorHSL.x, ColorReplace.ReplacementColorHSL.x, 1.0 - LerpAmount);
+			SceneColorOut = HSLtoRGB(float3(HueLerp, SceneColorHSL.y, SceneColorHSL.z));
+			InterlockedAdd(ColorReplacementCount[i], 1);
+			bChanged = true;
+			break;
+		}
+	}
+
+	BRANCH
+	if (bChanged)
+	{
+		SceneColorTexture[DispatchThreadID.xy] = saturate(float4(SceneColorOut, SceneColor.a));
+	}
+
+	if (DispatchThreadID.x == 0 && DispatchThreadID.y == 0)
+	{
+		float2 SceneDimensions;
+		SceneColorTexture.GetDimensions(SceneDimensions.x, SceneDimensions.y);
+		const int GroupX = ceil(SceneDimensions.x / 16);
+		const int GroupY = ceil(SceneDimensions.y / 16);
+
+		ExecuteIndirectBuffer.Store(4 * 0, GroupX);
+		ExecuteIndirectBuffer.Store(4 * 1, GroupY);
+		ExecuteIndirectBuffer.Store(4 * 2, 1);
+	}
+}
+
+[numthreads(16, 16, 1)]
+void IndirectDispatchCS(uint3 DispatchThreadID : SV_DispatchThreadID, uint3 GroupThreadID : SV_GroupThreadID)
+{
+	// Convert scene color to HSL
+	const float4 SceneColor = SceneColorTexture[DispatchThreadID.xy];
+	const float3 SceneColorHSL = RGBtoHSL(SceneColor.rgb);
+
+	// Any colors that are below the lightness threshold will be darkened to black
+	BRANCH
+	if (SceneColorHSL.z < 0.1)
+	{
+		const float GreyScale = 0.21 * SceneColor.r + 0.72 * SceneColor.g + 0.07 * SceneColor.b;
+		SceneColorTexture[DispatchThreadID.xy] = float4(GreyScale.xxx, SceneColor.a);
+	}
+}

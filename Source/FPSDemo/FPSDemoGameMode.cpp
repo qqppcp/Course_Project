@@ -4,8 +4,10 @@
 
 #include "EngineUtils.h"
 #include "FPSDemo.h"
+#include "FPSDemoAIController.h"
 #include "FPSDemoAttributeComponent.h"
 #include "FPSDemoCharacter.h"
+#include "FPSDemoGameStateBase.h"
 #include "FPSDemoPlayerController.h"
 #include "FPSDemoPlayerState.h"
 #include "Blueprint/UserWidget.h"
